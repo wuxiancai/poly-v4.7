@@ -761,13 +761,9 @@ class CryptoTrader:
                                        command=self.click_sell_no)
         self.sell_no_button.grid(row=1, column=1, padx=2, pady=5)
 
-        self.sell_button = ttk.Button(button_frame, text="Sell", width=5,
-                                    command=self.click_sell)
-        self.sell_button.grid(row=1, column=2, padx=2, pady=5)
-
         self.restart_button = ttk.Button(button_frame, text="重启", width=4,
                                     command=self.restart_program)
-        self.restart_button.grid(row=1, column=3, padx=2, pady=5)
+        self.restart_button.grid(row=1, column=2, padx=2, pady=5)
 
         # 配置列权重使按钮均匀分布
         for i in range(4):
@@ -1323,7 +1319,7 @@ class CryptoTrader:
             # 2. 按1次ENTER
             time.sleep(0.3)
             pyautogui.press('enter')
-            time.sleep(2)  # 等待2秒
+            time.sleep(3)  # 等待2秒
             
             # 3. 按7次TAB
             for _ in range(7):
@@ -2335,26 +2331,6 @@ class CryptoTrader:
         except Exception as e:
             self.logger.error(f"点击 Buy 按钮失败: {str(e)}")
             self.update_status(f"点击 Buy 按钮失败: {str(e)}")
-
-    def click_sell(self):
-        """点击 Sell 按钮"""
-        try:
-            if not self.driver:
-                self.update_status("请先连接浏览器")
-                return
-            try:
-                button = self.driver.find_element(By.XPATH, XPathConfig.SELL_BUTTON)
-            except Exception as e:
-                button = self._find_element_with_retry(
-                    XPathConfig.SELL_BUTTON,
-                    timeout=3,
-                    silent=True
-                )
-            button.click()
-            self.update_status("已点击 Sell 按钮")
-        except Exception as e:
-            self.logger.error(f"点击 Sell 按钮失败: {str(e)}")
-            self.update_status(f"点击 Sell 按钮失败: {str(e)}")
 
     def click_buy_yes(self):
         """点击 Buy.Yes 按钮"""
