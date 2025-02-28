@@ -129,7 +129,7 @@ class CryptoTrader:
       
         # 添加登录状态监控定时器
         self.login_check_timer = None
-        
+        self.driver_lock = threading.Lock()  # 添加浏览器操作锁
             
     def load_config(self):
         """加载配置文件，保持默认格式"""
@@ -1069,7 +1069,7 @@ class CryptoTrader:
                 current_time = datetime.now().strftime('%H:%M:%S')
                 self.balance_update_label.config(text=f"最后更新: {current_time}")  
             except Exception as e:
-                self.logger.error(f"获取CASH失败: {str(e)}")
+                self.logger.error(f"获取Portfolio和Cash失败: {str(e)}")
                 self.portfolio_label.config(text="Portfolio: 获取失败")
                 self.cash_label.config(text="Cash: 获取失败")
                 self.check_balance()
@@ -3237,6 +3237,10 @@ class CryptoTrader:
 
     def auto_find_price_54_coin(self):
         """自动寻找价格在45-54区间的币对"""
+        # 保存当前窗口ID
+        original_window = self.driver.current_window_handle
+        self.logger.debug(f"保存原始窗口ID: {original_window}")
+        
         position_label_yes = self.find_position_label_yes()
         position_label_no = self.find_position_label_no()
 
@@ -3288,11 +3292,7 @@ class CryptoTrader:
                     self.root.after(0, self._enter_price_check_mode)
 
                     try:
-                                # 保存当前URL
-                                current_url = self.url_entry.get().strip()
-                                if not current_url:
-                                    time.sleep(5)
-                                    continue
+                                
                                 found_suitable_coin = False
                                 # 核心检查逻辑
                                 check_start = time.time()
@@ -3348,7 +3348,12 @@ class CryptoTrader:
                                             return
                                             
                                     except Exception as e:
-                                        self.logger.warning(f"检查{coin}价格时出错: {str(e)}")
+                                        if "invalid session id" in str(e).lower():
+                                            self.logger.critical("浏览器会话丢失，需要重新初始化")
+                                            self._reinit_browser()
+                                            break  # 退出当前检查循环
+                                        else:
+                                            self.logger.warning(f"检查{coin}价格时出错: {str(e)}")
                                         continue
                                  # 精确间隔控制
                                 elapsed = time.time() - check_start
@@ -3360,13 +3365,15 @@ class CryptoTrader:
                                     self.logger.info(f"发现符合要求的币种: {coin}")
                                     
                     finally:
+                        # 恢复原始窗口
                         try:
-                            # 恢复原始URL
-                            if current_url:
-                                self.logger.debug(f"正在恢复原始URL: {current_url}")
-                                self.driver.get(current_url)
+                            self.logger.debug(f"尝试恢复窗口ID: {original_window}")
+                            self.driver.switch_to.window(original_window)
+                            self.logger.info("已成功恢复监控页面")
+                            self.driver.refresh()
                         except Exception as e:
-                                self.logger.error(f"恢复URL失败: {str(e)}")
+                            self.logger.critical(f"窗口恢复失败: {str(e)}")
+                            
                         finally:
                             # 使用主线程队列安全地重启监控
                             self.root.after(0, self.start_url_monitoring)
@@ -3396,6 +3403,29 @@ class CryptoTrader:
             name="PriceChecker"
         )
         price_thread.start()
+
+    def _is_valid_session(self):
+        """增强型会话检查"""
+        try:
+            # 尝试执行一个无害操作来验证会话
+            with self.driver_lock:
+                self.driver.execute_script("return 1;")
+                return True
+        except Exception as e:
+            self.logger.debug(f"会话有效性检查失败: {str(e)}")
+            return False
+
+
+    def _reinit_browser(self):
+        """安全地重新初始化浏览器"""
+        with self.driver_lock:
+            try:
+                self.logger.info("正在尝试重新初始化浏览器...")
+                self.driver.quit()
+            except:
+                pass
+            self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+            self.logger.info("浏览器重新初始化完成")
 
 if __name__ == "__main__":
     try:
