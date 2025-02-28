@@ -25,7 +25,7 @@ from email.mime.multipart import MIMEMultipart
 from email.header import Header
 import socket
 import sys
-import subprocess
+import logging
 from xpath_config import XPathConfig
 from threading import Thread
 
@@ -72,6 +72,7 @@ class Logger:
     
     def critical(self, message):
         self.logger.critical(message)
+    
 
 class CryptoTrader:
     def __init__(self):
@@ -235,7 +236,7 @@ class CryptoTrader:
             self.logger.error(f"保存配置失败: {str(e)}")
             raise
 
-    """从这里开始设置 GUI 直到 761 行"""
+    """从这里开始设置 GUI 直到 785 行"""
     def setup_gui(self):
         self.root = tk.Tk()
         self.root.title("Polymarket 4次自动交易4%利润率！")
@@ -781,9 +782,9 @@ class CryptoTrader:
         copyright_label = ttk.Label(scrollable_frame, text="Powered by 无为 Copyright 2024",
                                    font=('Arial', 12), foreground='gray')
         copyright_label.pack(pady=(0, 5))  # 上边距0，下距5
-    """以上代码从240行到 761 行是设置 GUI 界面的"""
+    """以上代码从240行到 785 行是设置 GUI 界面的"""
 
-    """以下代码从 763 行到行是程序交易逻辑"""
+    """以下代码从 788 行到行是程序交易逻辑"""
     def start_monitoring(self):
         """开始监控"""
         # 直接使用当前显示的网址
@@ -816,8 +817,7 @@ class CryptoTrader:
         # 启动登录状态监控
         self.start_login_monitoring()
         # 启动自动更新URL任务
-        self.auto_update_url()
-        self.logger.info("自动更新URL任务启动完成")
+        self.saturday_auto_update_url()
 
         self.refresh_page()
         
@@ -1077,9 +1077,9 @@ class CryptoTrader:
             self.logger.error(f"检查资金失败: {str(e)}")
             self.update_status(f"资金检查错误: {str(e)}")
             time.sleep(2)
-    """以上代码执行了监控价格和获取 CASH 的值。从这里开始程序返回到第 740 行"""  
+    """以上代码执行了监控价格和获取 CASH 的值。从这里开始程序返回到第 810 行"""  
 
-    """以下代码是设置 YES/NO 金额的函数,直到第 1127 行"""
+    """以下代码是设置 YES/NO 金额的函数,直到第 1220行"""
     def schedule_update_amount(self, retry_count=0):
         """设置金额,带重试机制"""
         try:
@@ -1216,21 +1216,16 @@ class CryptoTrader:
         if hasattr(self, 'retry_timer'):
             self.root.after_cancel(self.retry_timer)
         self.retry_timer = self.root.after(3000, self.set_yes_no_cash)  # 3秒后重试
-    """以上代码执行了设置 YES/NO 金额的函数,从 1000 行到 1127 行,程序执行返回到 745 行"""
+    """以上代码执行了设置 YES/NO 金额的函数,从 1020 行到 1220 行,程序执行返回到 815 行"""
 
-    """以下代码是启动 URL 监控和登录状态监控的函数,直到第 1230 行"""
+    """以下代码是启动 URL 监控和登录状态监控的函数,直到第 1402 行"""
     def start_url_monitoring(self):
         """启动URL监控(线程安全版本)"""
         with self.url_monitoring_lock:
             if self.url_check_timer is not None:
                 return
                 
-            def _monitor():
-                with self.url_monitoring_lock:
-                    if not self.running or self.is_checking_prices:
-                        self.url_check_timer = None
-                        return
-                        
+            def _monitor(): 
                     try:
                         current_url = self.driver.current_url if self.driver else ""
                         target_url = self.target_url
@@ -1249,10 +1244,17 @@ class CryptoTrader:
 
     def stop_url_monitoring(self):
         """停止URL监控(线程安全版本)"""
-        with self.url_monitoring_lock:
+        with self.url_monitoring_lock:  # 使用相同的锁
             if self.url_check_timer is not None:
-                self.root.after_cancel(self.url_check_timer)
-                self.url_check_timer = None
+                try:
+                    self.logger.info("🛑 正在停止URL监控...")
+                    self.root.after_cancel(self.url_check_timer)
+                except ValueError:
+                    # 定时器可能已过期或已被取消
+                    self.logger.warning("取消定时器时发现无效ID")
+                finally:
+                    self.url_check_timer = None
+                self.logger.debug("URL监控已完全停止")
                 
     def start_login_monitoring(self):
         """优化版登录状态监控（完全静默处理）"""
@@ -1399,7 +1401,7 @@ class CryptoTrader:
             self.logger.error(f"页面刷新失败: {str(e)}")
             if self.running:
                 self.refresh_timer = self.root.after(self.refresh_interval, self.refresh_page)
-    """以上代码执行了登录操作的函数,直到第 1315 行,程序执行返回到 748 行"""
+    """以上代码执行了登录操作的函数,直到第 1315 行,程序执行返回到 848 行"""
    
     """以下代码是监控买卖条件及执行交易的函数,程序开始进入交易阶段,从 1321 行直到第 2500 行"""  
     def First_trade(self):
@@ -2145,7 +2147,7 @@ class CryptoTrader:
                 # 尝试获取YES标签
                 try:
                     position_label_yes = self.driver.find_element(By.XPATH, XPathConfig.POSITION_YES_LABEL)
-                    position_value = position_label_yes.text
+                    position_value = position_label_yes.text.strip()
                 except Exception as e:
                     position_label_yes = self._find_element_with_retry(
                         XPathConfig.POSITION_YES_LABEL,
@@ -2153,7 +2155,7 @@ class CryptoTrader:
                         silent=True
                     )
                 
-                if position_value:
+                if position_value and position_value == "Yes":
                     return position_value
                 else:
                     return None
@@ -2193,7 +2195,7 @@ class CryptoTrader:
                 # 尝试获取YES标签
                 try:
                     position_label_no = self.driver.find_element(By.XPATH, XPathConfig.POSITION_NO_LABEL)
-                    position_value = position_label_no.text
+                    position_value = position_label_no.text.strip()
                 except Exception as e:
                     position_label_no = self._find_element_with_retry(
                         XPathConfig.POSITION_NO_LABEL,
@@ -2201,7 +2203,7 @@ class CryptoTrader:
                         silent=True
                     )
                 
-                if position_value:
+                if position_value and position_value == "No":
                     return position_value
                 else:
                     return None
@@ -3000,8 +3002,7 @@ class CryptoTrader:
 
     def update_status(self, message):
         # 检查是否是错误消息
-        is_error = any(err in message.lower() for err in ['错误', '失败', 'error', 'failed', 'exception'])
-        
+        is_error = any(keyword in message for keyword in ["错误", "失败", "异常","error"])  # 更全面的关键词检测
         # 更新状态标签，如果是错误则显示红色
         self.status_label.config(
             text=f"状态: {message}",
@@ -3033,17 +3034,18 @@ class CryptoTrader:
             self.logger.error(f"程序运行出错: {str(e)}")
             raise
 
-    def auto_update_url(self):
-        """自动更新URL(每周六凌晨1:30开始)"""
+    def saturday_auto_update_url(self):
+        """自动更新URL(每周六凌晨1点开始)"""
+        self.logger.info("自动更新URL任务启动完成")
         def is_time_to_update():
             """检查是否到了更新时间(北京时间每周六凌晨1:10)"""
-            # 获取北京时间
             beijing_tz = timezone(timedelta(hours=8))
             now = datetime.now(timezone.utc).astimezone(beijing_tz)
+            weekday = now.weekday()
             
-            # 周六是5 (周一是0)
-            should_update = now.weekday() == 5 and now.hour == 1 and now.minute >= 10
-            return should_update
+            # 每周六 1点 开始8 点结束
+            update_time = weekday == 5 and 1 <= now.hour < 8
+            return update_time
         
         def get_current_button():
             """根据当前URL判断应该点击哪个按钮"""
@@ -3069,41 +3071,35 @@ class CryptoTrader:
             try:
                 # 立即进行一次时间检查
                 is_time_to_update()
-                while True:
+
+                while self.running:
                     try:
                         # 检查是否到了更新时间
                         if is_time_to_update():
                             self.logger.info("到达预定更新时间,开始更新URL")
-                            current_url = self.url_entry.get().strip()
-                        
-                            # 获取当前应该点击的按钮
-                            current_button = get_current_button()
-                            
-                            # 记录当前URL
-                            current_url = self.url_entry.get().strip()
-                            self.logger.info(f"当前URL: {current_url}")
-                            
-                            # 尝试更新URL
-                            try:
-                                new_weekly_url = self.find_weekly_url(current_button['text'])
-                                
-                                if new_weekly_url and new_weekly_url != current_url:
-                                    self.logger.info(f"获取到新URL: {new_weekly_url}")
-                                    # 更新配置文件
-                                    self.config['website']['url'] = new_weekly_url
-                                    self.save_config()
-                                    # 重启程序
-                                    self.restart_program()
-                                    break
-                                else:
-                                    self.logger.info("URL未变化或获取失败,10分钟后重试")
+                            while True:
+                                try:
+                                    # 获取当前应该点击的按钮
+                                    current_button = get_current_button()
+                                    # 记录当前URL
+                                    current_url = self.url_entry.get().strip()
+                                    new_weekly_url = self.find_weekly_url(current_button['text'])
+                                    
+                                    if new_weekly_url and new_weekly_url != current_url:
+                                        self.logger.info(f"获取到新URL: {new_weekly_url}")
+                                        self.config['website']['url'] = new_weekly_url
+                                        self.save_config()
+                                        self.restart_program()
+                                        return
+                                    else:
+                                        self.logger.info("URL未变化或获取失败,10分钟后重试")
+                                        time.sleep(600)
+                                except Exception as e:
+                                    self.logger.error(f"更新URL过程出错: {str(e)}")
                                     time.sleep(600)
-                            except Exception as e:
-                                self.logger.error(f"更新URL过程出错: {str(e)}")
-                                time.sleep(600)
                         else:
-                            # 未到更新时间，每1分钟检查一次
-                            time.sleep(60)
+                            # 未到更新时间，每1小时检查一次
+                            time.sleep(3600)
                                   
                     except Exception as e:
                         self.logger.error(f"自动更新任务异常: {str(e)}")
@@ -3241,19 +3237,35 @@ class CryptoTrader:
 
     def auto_find_price_54_coin(self):
         """自动寻找价格在45-54区间的币对"""
+        position_label_yes = self.find_position_label_yes()
+        position_label_no = self.find_position_label_no()
+
+        # 精确判断元素存在且文本内容匹配
+        if (position_label_yes and position_label_yes.text.strip() == "Yes") or \
+            (position_label_no and position_label_no.text.strip() == "No"):
+            self.logger.info("检测到持仓，终止价格检查")
+            return
+        
         def is_valid_time():
             """检查是否在有效时间范围内"""
             beijing_tz = timezone(timedelta(hours=8))
             now = datetime.now(timezone.utc).astimezone(beijing_tz)
             weekday = now.weekday()
             hour = now.hour
+
             # 北京时间每周日零点到周五 20 点执行检查
             if weekday == 6:  # 周日全天有效
                 return True
-            elif 0 <= weekday <= 4 and hour < 20:  # 周一到周五 20点前有效
+            elif weekday == 4 and hour < 20:  # 周一到周五 20点前有效
+                return True
+            elif 0 <= weekday <= 3:  # 周一到周五 20点前有效
                 return True
             else:
                 return False
+            
+        if not is_valid_time():
+            self.logger.debug("非周日到周五晚上 8 点时段,退出执行!")
+            return
 
         def find_price_task():
             try:
@@ -3265,25 +3277,26 @@ class CryptoTrader:
                     (self.doge_button, 'DOGE')
                 ]
                 
-                while True:
-                    try:
-                        if is_valid_time():
-                            self.logger.info("开始检查各币种价格...")
-
-                            # 停止URL监控
-                            self.stop_url_monitoring()
-                            self.is_checking_prices = True
-                            self.logger.debug("已停止URL监控,开始价格检查")
+                while self.running:
+                    
+                    if not is_valid_time():
+                        self.logger.debug("非交易时段，暂停检查")
+                        time.sleep(300)
+                        continue
                         
-                            try:
+                    # 将GUI操作放入主线程队列
+                    self.root.after(0, self._enter_price_check_mode)
+
+                    try:
                                 # 保存当前URL
                                 current_url = self.url_entry.get().strip()
                                 if not current_url:
-                                    self.logger.info("等待当前URL加载...")
                                     time.sleep(5)
                                     continue
                                 found_suitable_coin = False
-
+                                # 核心检查逻辑
+                                check_start = time.time()
+                                
                                 for button, coin in coin_buttons:
                                     try:
                                         weekly_again_url = self.find_weekly_url(coin)
@@ -3337,36 +3350,52 @@ class CryptoTrader:
                                     except Exception as e:
                                         self.logger.warning(f"检查{coin}价格时出错: {str(e)}")
                                         continue
-                                        
+                                 # 精确间隔控制
+                                elapsed = time.time() - check_start
+                                if elapsed < 600:
+                                    time.sleep(600 - elapsed)    
                                 if not found_suitable_coin:
                                     self.logger.info("没有找到45-54范围内的币对,继续监控原来的网址")
+                                else:
+                                    self.logger.info(f"发现符合要求的币种: {coin}")
                                     
-                            finally:
-                                # 恢复原始URL
-                                if current_url:
-                                    self.driver.get(current_url)
-                                # 重置状态
-                                self.is_checking_prices = False
-                                self.start_url_monitoring()
-                                self.logger.debug("价格检查完成,已恢复URL监控")
-                        else:
-                            time.sleep(600)
-                            
-                    except Exception as e:
-                        self.is_checking_prices = False  # 确保在异常情况下也重置标志
-                        self.logger.warning(f"价格检查任务异常: {str(e)}")
-                        time.sleep(60)
-                        
-            except Exception as e:
-                self.is_checking_prices = False  # 确保在异常情况下也重置标志
-                self.logger.error(f"价格查找线程异常: {str(e)}")
+                    finally:
+                        try:
+                            # 恢复原始URL
+                            if current_url:
+                                self.logger.debug(f"正在恢复原始URL: {current_url}")
+                                self.driver.get(current_url)
+                        except Exception as e:
+                                self.logger.error(f"恢复URL失败: {str(e)}")
+                        finally:
+                            # 使用主线程队列安全地重启监控
+                            self.root.after(0, self.start_url_monitoring)
+                            self.is_checking_prices = False
+                            self.logger.debug("价格检查流程完成")    
+            finally:
+                self._price_check_running = False
+                self.root.after(0, self._exit_price_check_mode)
 
-        # 启动后台线程执行任务
-        try:
-            price_thread = Thread(target=find_price_task, daemon=True, name="Price_Check_Thread")
-            price_thread.start()
-        except Exception as e:
-            self.logger.error(f"启动价格查找线程失败: {str(e)}")
+        # 新增模式切换方法
+        def _enter_price_check_mode(self):
+            if not self._price_check_running:  # 添加状态检查
+                self.stop_url_monitoring()
+                self.is_checking_prices = True
+                self.logger.debug("进入价格检查模式")
+
+        def _exit_price_check_mode(self):
+            self.is_checking_prices = False
+            self.logger.debug("退出价格检查模式")
+        if self._price_check_thread and self._price_check_thread.is_alive():
+            self.logger.warning("已有价格检查线程在运行")
+            return
+        # 启动独立线程
+        price_thread = threading.Thread(
+            target=find_price_task,
+            daemon=True,
+            name="PriceChecker"
+        )
+        price_thread.start()
 
 if __name__ == "__main__":
     try:
